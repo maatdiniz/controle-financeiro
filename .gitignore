@@ -1,0 +1,33 @@
+# Arquivos de Log
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Dependências do Node (ESSENCIAL)
+# Nunca envie esta pasta para o git
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Arquivos de Variáveis de Ambiente (MUITO IMPORTANTE)
+# Contém senhas e segredos
+.env
+.env*.local
+.env.*.local
+
+# Dados do Banco de Dados
+# SQLite
+*.db
+*.db-journal
+
+# PostgreSQL (criado pelo Docker)
+postgres_data/
+
+# Arquivos de sistema operacional e de IDE
+.DS_Store
+Thumbs.db
+.vscode/

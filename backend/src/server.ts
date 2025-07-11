@@ -108,6 +108,22 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// Rota para listar todos os gastos
+app.get('/gastos', async (req, res) => {
+  try {
+    const todosOsGastos = await prisma.gasto.findMany({
+      // Opcional: ordenar os gastos do mais recente para o mais antigo
+      orderBy: {
+        data: 'desc',
+      },
+    });
+    res.status(200).json(todosOsGastos);
+  } catch (error) {
+    console.error("Erro ao buscar gastos:", error);
+    res.status(500).send("Erro interno ao buscar os dados.");
+  }
+});
+
 app.listen(port, () => {
   console.log(`🚀 Servidor rodando em http://localhost:${port}`);
 });

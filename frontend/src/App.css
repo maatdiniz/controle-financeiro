@@ -1,0 +1,30 @@
+/* frontend/src/App.css */
+
+/* Garante que o AppShell e seus containers internos usem toda a altura da tela */
+.app-shell-container,
+.app-shell-container > div {
+  height: 100vh;
+}
+
+/* Define a área principal como um container flexbox que organiza tudo em coluna */
+.main-content-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* Ocupa 100% da altura da AppShell.Main */
+}
+
+/* O Card que segura a tabela.
+   flex-grow: 1; é a instrução chave. Ele diz: "cresça e ocupe todo o espaço
+   vertical que sobrar dentro do main-content-container". */
+.table-card {
+  flex-grow: 1;
+  display: flex; /* Permite que o conteúdo interno (ScrollArea) também use flexbox */
+  flex-direction: column;
+}
+
+/* A área de rolagem.
+   Ela precisa que seu pai (o Card) tenha uma altura definida. Como o pai
+   agora tem flex-grow, a ScrollArea vai se ajustar perfeitamente. */
+.table-scroll-area {
+  flex-grow: 1;
+}

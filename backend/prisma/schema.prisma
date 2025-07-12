@@ -16,14 +16,17 @@ generator client {
 }
 
 model Gasto {
-  id          Int      @id @default(autoincrement())
-  data        DateTime
-  descricao   String
-  categoria   String
-  custoTotal  Float
-  moeda       String
-  suaParte    Float
+  id            Int      @id @default(autoincrement())
+  data          DateTime
+  descricao     String
+  categoria     String
+  custoTotal    Float
+  moeda         String
+  suaParte      Float
   parteParceiro Float
-  criadoEm    DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  origem        String   @default("csv") // 'csv' ou 'manual'
+  conciliado    Boolean  @default(false)
+  faturaInfo    String?  // Opcional, para guardar o nome da fatura
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
 }

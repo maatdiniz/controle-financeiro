@@ -14,15 +14,19 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^6.11.1",
+    "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
-    "multer": "^2.0.1"
+    "multer": "^2.0.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.0.12",
+    "@types/xlsx": "^0.0.35",
     "dotenv-cli": "^8.0.0",
     "nodemon": "^3.1.10",
     "prisma": "^6.11.1",

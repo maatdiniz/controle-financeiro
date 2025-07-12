@@ -30,3 +30,14 @@ model Gasto {
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
 }
+
+model FaturaItem {
+  id          Int      @id @default(autoincrement())
+  data        DateTime
+  lancamento  String   // Descrição da fatura
+  categoria   String?  // Categoria na fatura (opcional)
+  tipo        String?  // Tipo de compra (à vista, parcelado) (opcional)
+  valor       Float
+  nomeArquivo String   // Nome do arquivo de origem
+  criadoEm    DateTime @default(now())
+}

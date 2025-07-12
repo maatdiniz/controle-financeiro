@@ -3,9 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Table, Group, TextInput, Button, ScrollArea, Center, Loader, Text, Badge, FileButton } from '@mantine/core';
-import { notifications } from '@mantine/notifications'; // Importa a API de notificações
+import { notifications } from '@mantine/notifications';
 
-// Interface Gasto, agora com os campos de conciliação
 interface Gasto {
   id: number;
   data: string;
@@ -25,44 +24,25 @@ export default function ListaGastos() {
   const [gastosExibidos, setGastosExibidos] = useState<Gasto[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-
-  // Estados de interatividade
   const [textoBusca, setTextoBusca] = useState('');
   const [filtroAtivo, setFiltroAtivo] = useState('');
   const [colunaOrdenada, setColunaOrdenada] = useState<keyof Gasto | null>('data');
   const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('desc');
-
-  // NOVOS ESTADOS PARA A RECONCILIAÇÃO
   const [arquivoFatura, setArquivoFatura] = useState<File | null>(null);
   const [processando, setProcessando] = useState(false);
-  const resetRef = useRef<() => void>(null); // Para limpar o botão de arquivo
+  const resetRef = useRef<() => void>(null);
 
-  // Função para recarregar os dados do backend
   const fetchGastos = () => {
     fetch('http://localhost:3000/gastos')
-      .then(res => {
-        if (!res.ok) throw new Error('Falha ao buscar dados');
-        return res.json();
-      })
-      .then(data => {
-        setTodosOsGastos(data);
-      })
-      .catch(err => {
-        setErro(err.message);
-      })
-      .finally(() => {
-        setCarregando(false);
-      });
+      .then(res => { if (!res.ok) throw new Error('Falha ao buscar dados'); return res.json(); })
+      .then(data => { setTodosOsGastos(data); })
+      .catch(err => { setErro(err.message); })
+      .finally(() => { setCarregando(false); });
   };
 
-  // Efeito inicial para carregar os dados
-  useEffect(() => {
-    fetchGastos();
-  }, []);
+  useEffect(() => { fetchGastos(); }, []);
 
-  // Efeito para filtrar e ordenar a tabela
   useEffect(() => {
-    // ... (o código deste useEffect continua o mesmo)
     let dados = [...todosOsGastos];
     if (filtroAtivo) { dados = dados.filter(g => g.descricao.toLowerCase().includes(filtroAtivo.toLowerCase())); }
     if (colunaOrdenada) {
@@ -76,39 +56,32 @@ export default function ListaGastos() {
     setGastosExibidos(dados);
   }, [filtroAtivo, colunaOrdenada, direcaoOrdenacao, todosOsGastos]);
 
-
   const handleSort = (coluna: keyof Gasto) => {
     const novaDirecao = coluna === colunaOrdenada && direcaoOrdenacao === 'asc' ? 'desc' : 'asc';
     setColunaOrdenada(coluna);
     setDirecaoOrdenacao(novaDirecao);
   };
+
   const handleBuscarClick = () => setFiltroAtivo(textoBusca);
-  
-  // NOVA FUNÇÃO para lidar com a reconciliação
-  const handleReconciliar = async () => {
+
+  const handleConciliar = async () => {
     if (!arquivoFatura) return;
     setProcessando(true);
-
     const formData = new FormData();
     formData.append('fatura', arquivoFatura);
-
     try {
-      const response = await fetch('http://localhost:3000/reconciliar', {
+      const response = await fetch('http://localhost:3000/conciliar', {
         method: 'POST',
         body: formData,
       });
-
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Erro no servidor');
-
       notifications.show({
         title: 'Sucesso!',
         message: `Conciliação processada. ${result.vinculosEncontrados} vínculos realizados.`,
         color: 'green',
       });
-      
-      fetchGastos(); // Recarrega os dados para mostrar as linhas coloridas
-      
+      fetchGastos();
     } catch (err: any) {
       notifications.show({
         title: 'Erro na conciliação',
@@ -118,20 +91,17 @@ export default function ListaGastos() {
     } finally {
       setProcessando(false);
       setArquivoFatura(null);
-      resetRef.current?.(); // Limpa a seleção de arquivo
+      resetRef.current?.();
     }
   };
 
-
   const rows = gastosExibidos.map((gasto) => (
-    // Aplica um estilo na linha inteira se o gasto estiver conciliado
     <Table.Tr key={gasto.id} style={{ background: gasto.conciliado ? 'var(--mantine-color-green-light)' : undefined }}>
-      {/* ... (o conteúdo das células <Table.Td> continua o mesmo) ... */}
       <Table.Td>
         <Center>
-            <Badge color={gasto.origem === 'manual' ? 'blue' : 'teal'} variant="light">
-              {gasto.origem.toUpperCase()}
-            </Badge>
+          <Badge color={gasto.origem === 'manual' ? 'blue' : 'teal'} variant="light">
+            {gasto.origem.toUpperCase()}
+          </Badge>
         </Center>
       </Table.Td>
       <Table.Td>{new Date(gasto.data).toLocaleDateString()}</Table.Td>
@@ -150,25 +120,22 @@ export default function ListaGastos() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Group justify="space-between" mb="md">
         <Group>
-          <TextInput placeholder="Filtrar por descrição..." value={textoBusca} onChange={(e) => setTextoBusca(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBuscarClick() }}/>
+          <TextInput placeholder="Filtrar por descrição..." value={textoBusca} onChange={(e) => setTextoBusca(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBuscarClick() }} />
           <Button onClick={handleBuscarClick}>Buscar</Button>
         </Group>
-
-        {/* NOVA ÁREA DE RECONCILIAÇÃO */}
-        <Group>
-          <FileButton resetRef={resetRef} onChange={setArquivoFatura} accept=".xlsx, .csv">
-            {(props) => <Button {...props}>Selecionar Fatura</Button>}
-          </FileButton>
-          <Button onClick={handleReconciliar} disabled={!arquivoFatura} loading={processando}>
-            Reconciliar
-          </Button>
-        </Group>
-
+        <div>
+          <Text size="sm" c="dimmed">Fatura (.xlsx/.csv): Data, Lançamento, Categoria, Tipo, Valor</Text>
+          <Group mt={4}>
+            <FileButton resetRef={resetRef} onChange={setArquivoFatura} accept=".xlsx, .csv">
+              {(props) => <Button {...props}>Selecionar Fatura</Button>}
+            </FileButton>
+            <Button onClick={handleConciliar} disabled={!arquivoFatura} loading={processando}>Conciliar</Button>
+          </Group>
+        </div>
         <Button component={Link} to="/adicionar">Adicionar Gasto</Button>
       </Group>
 
       <ScrollArea style={{ flexGrow: 1 }}>
-        {/* ... (o código da Table, Thead, e Tbody continua o mesmo) ... */}
         <Table miw={850} striped highlightOnHover withColumnBorders stickyHeader>
           <Table.Thead>
             <Table.Tr>

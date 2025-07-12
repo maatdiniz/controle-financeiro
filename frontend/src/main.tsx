@@ -10,6 +10,8 @@ import { NotificationProvider } from './context/NotificationContext';
 import App from './App.tsx';
 import ListaGastos from './pages/ListaGastos.tsx';
 import AdicionarGasto from './pages/AdicionarGasto.tsx';
+import Faturas from './pages/Faturas.tsx';
+import AdicionarPlanilha from './pages/AdicionarPlanilha.tsx'; // 1. Importa com o nome novo
 
 const router = createBrowserRouter([
   {
@@ -18,6 +20,9 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <ListaGastos /> },
       { path: "adicionar", element: <AdicionarGasto /> },
+      { path: "faturas", element: <Faturas /> },
+      // 2. A rota agora aponta para o novo nome de ficheiro
+      { path: "importar-planilha", element: <AdicionarPlanilha /> },
     ],
   },
 ]);

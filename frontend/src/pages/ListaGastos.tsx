@@ -1,23 +1,13 @@
 // frontend/src/pages/ListaGastos.tsx
 
-import { useState, useEffect, useRef, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { Table, Group, TextInput, Button, ScrollArea, Center, Loader, Text, Badge, FileButton } from '@mantine/core';
+import { Table, Group, TextInput, Button, ScrollArea, Center, Loader, Text, Badge, ActionIcon, Tooltip } from '@mantine/core';
+import { IconTrash } from '@tabler/icons-react'; // Importa o ícone de lixeira
 import { NotificationContext } from '../context/NotificationContext';
 
-interface Gasto {
-  id: number;
-  data: string;
-  descricao: string;
-  categoria: string;
-  custoTotal: number;
-  moeda: string;
-  suaParte: number;
-  parteParceiro: number;
-  origem: 'csv' | 'manual';
-  conciliado: boolean;
-  faturaInfo: string | null;
-}
+// Interface Gasto (sem alterações)
+interface Gasto { id: number; data: string; descricao: string; categoria: string; custoTotal: number; moeda: string; suaParte: number; parteParceiro: number; origem: 'csv' | 'manual'; conciliado: boolean; faturaInfo: string | null; }
 
 export default function ListaGastos() {
   const { addNotification } = useContext(NotificationContext);
@@ -30,10 +20,10 @@ export default function ListaGastos() {
   const [filtroAtivo, setFiltroAtivo] = useState('');
   const [colunaOrdenada, setColunaOrdenada] = useState<keyof Gasto | null>('data');
   const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('desc');
-  const [arquivoFatura, setArquivoFatura] = useState<File | null>(null);
-  const [processando, setProcessando] = useState(false);
-  const resetRef = useRef<() => void>(null);
-
+  
+  // O código para conciliação foi removido para esta etapa, 
+  // podemos adicioná-lo de volta depois.
+  
   const fetchGastos = () => {
     setCarregando(true);
     fetch('http://localhost:3000/gastos')
@@ -50,7 +40,8 @@ export default function ListaGastos() {
     if (filtroAtivo) { dados = dados.filter(g => g.descricao.toLowerCase().includes(filtroAtivo.toLowerCase())); }
     if (colunaOrdenada) {
       dados.sort((a, b) => {
-        const aValue = a[colunaOrdenada]; const bValue = b[colunaOrdenada];
+        const aValue = a[colunaOrdenada!]; const bValue = b[colunaOrdenada!];
+        if (aValue === null) return 1; if (bValue === null) return -1;
         if (aValue < bValue) return direcaoOrdenacao === 'asc' ? -1 : 1;
         if (aValue > bValue) return direcaoOrdenacao === 'asc' ? 1 : -1;
         return 0;
@@ -64,36 +55,26 @@ export default function ListaGastos() {
     setColunaOrdenada(coluna);
     setDirecaoOrdenacao(novaDirecao);
   };
-
   const handleBuscarClick = () => setFiltroAtivo(textoBusca);
-
-  const handleConciliar = async () => {
-    if (!arquivoFatura) return;
-    setProcessando(true);
-    addNotification({ title: 'Processando...', message: `Iniciada a conciliação de ${arquivoFatura.name}.`, color: 'blue' });
-
-    const formData = new FormData();
-    formData.append('fatura', arquivoFatura);
-
+  
+  // NOVA FUNÇÃO PARA EXCLUIR UM GASTO
+  const handleExcluir = async (gastoId: number) => {
+    if (!window.confirm('Tem certeza que deseja excluir este gasto?')) {
+      return;
+    }
     try {
-      const response = await fetch('http://localhost:3000/conciliar', { method: 'POST', body: formData });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'Erro no servidor');
-
-      addNotification({
-        title: 'Sucesso!',
-        message: `Conciliação concluída. ${result.vinculosEncontrados} vínculos realizados.`,
-        color: 'green',
+      const response = await fetch(`http://localhost:3000/gastos/${gastoId}`, {
+        method: 'DELETE',
       });
-      
-      fetchGastos();
-      
+      if (!response.ok) {
+        const res = await response.json();
+        throw new Error(res.error || 'Falha ao excluir o gasto.');
+      }
+      // Remove o gasto da lista na tela para feedback imediato
+      setTodosOsGastos(gastosAtuais => gastosAtuais.filter(g => g.id !== gastoId));
+      addNotification({ title: 'Sucesso', message: `Gasto ID ${gastoId} foi excluído.`, color: 'green' });
     } catch (err: any) {
-      addNotification({ title: 'Erro na conciliação', message: err.message, color: 'red' });
-    } finally {
-      setProcessando(false);
-      setArquivoFatura(null);
-      resetRef.current?.();
+      addNotification({ title: 'Erro ao Excluir', message: err.message, color: 'red' });
     }
   };
 
@@ -106,6 +87,18 @@ export default function ListaGastos() {
         <Table.Td align="right">{gasto.custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
         <Table.Td align="right">{gasto.suaParte.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
         <Table.Td align="right">{gasto.parteParceiro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
+        {/* NOVA CÉLULA DE AÇÕES */}
+        <Table.Td>
+            <Center>
+                {gasto.origem === 'manual' && (
+                    <Tooltip label="Excluir Gasto">
+                        <ActionIcon color="red" variant="subtle" onClick={() => handleExcluir(gasto.id)}>
+                            <IconTrash size={18} />
+                        </ActionIcon>
+                    </Tooltip>
+                )}
+            </Center>
+        </Table.Td>
     </Table.Tr>
   ));
 
@@ -119,20 +112,11 @@ export default function ListaGastos() {
           <TextInput placeholder="Filtrar por descrição..." value={textoBusca} onChange={(e) => setTextoBusca(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBuscarClick() }}/>
           <Button onClick={handleBuscarClick}>Buscar</Button>
         </Group>
-        <div>
-          <Text size="sm" c="dimmed">Fatura (.xlsx/.csv): Data, Lançamento, Categoria, Tipo, Valor</Text>
-          <Group mt={4}>
-            <FileButton resetRef={resetRef} onChange={setArquivoFatura} accept=".xlsx, .csv">
-              {(props) => <Button {...props}>Selecionar Fatura</Button>}
-            </FileButton>
-            <Button onClick={handleConciliar} disabled={!arquivoFatura} loading={processando}>Conciliar</Button>
-          </Group>
-        </div>
         <Button component={Link} to="/adicionar">Adicionar Gasto</Button>
       </Group>
 
       <ScrollArea style={{ flexGrow: 1 }}>
-        <Table miw={850} striped highlightOnHover withColumnBorders stickyHeader>
+        <Table miw={900} striped highlightOnHover withColumnBorders stickyHeader>
           <Table.Thead>
             <Table.Tr>
               <Table.Th style={{ width: 100, textAlign: 'center' }}>Origem</Table.Th>
@@ -142,9 +126,10 @@ export default function ListaGastos() {
               <Table.Th style={{ width: 150, textAlign: 'right', cursor: 'pointer' }} onClick={() => handleSort('custoTotal')}>Custo Total</Table.Th>
               <Table.Th style={{ width: 150, textAlign: 'right', cursor: 'pointer' }} onClick={() => handleSort('suaParte')}>Parte (Matheus)</Table.Th>
               <Table.Th style={{ width: 150, textAlign: 'right', cursor: 'pointer' }} onClick={() => handleSort('parteParceiro')}>Parte (Rodrigo)</Table.Th>
+              <Table.Th style={{ width: 80, textAlign: 'center' }}>Ações</Table.Th>
             </Table.Tr>
           </Table.Thead>
-          <Table.Tbody>{rows.length > 0 ? rows : <Table.Tr><Table.Td colSpan={7}><Center>Nenhum gasto encontrado.</Center></Table.Td></Table.Tr>}</Table.Tbody>
+          <Table.Tbody>{rows.length > 0 ? rows : <Table.Tr><Table.Td colSpan={8}><Center>Nenhum gasto encontrado.</Center></Table.Td></Table.Tr>}</Table.Tbody>
         </Table>
       </ScrollArea>
     </div>

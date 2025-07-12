@@ -1,43 +1,59 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-// prisma/schema.prisma
+// backend/prisma/schema.prisma
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL") // Agora a URL vem de uma variável de ambiente
+  url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
+// NOVA TABELA PARA REGISTAR CADA UPLOAD
+model Upload {
+  id            Int      @id @default(autoincrement())
+  nomeArquivo   String
+  tipoArquivo   String   // 'SPLITWISE_CSV' ou 'FATURA_XLSX'
+  dataUpload    DateTime @default(now())
+  
+  // Relações com as outras tabelas
+  gastos      Gasto[]
+  faturaItens FaturaItem[]
+}
+
 model Gasto {
   id            Int      @id @default(autoincrement())
   data          DateTime
   descricao     String
-  categoria     String
   custoTotal    Float
   moeda         String
   suaParte      Float
   parteParceiro Float
-  origem        String   @default("csv") // 'csv' ou 'manual'
+  origem        String   // 'csv', 'manual'
   conciliado    Boolean  @default(false)
-  faturaInfo    String?  // Opcional, para guardar o nome da fatura
+  faturaInfo    String?
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
+
+  // CAMPO DE RELAÇÃO: Cada gasto de CSV pertence a um upload
+  uploadId      Int?
+  upload        Upload?  @relation(fields: [uploadId], references: [id])
+  
+  // Colunas que não foram usadas, mas que podem ser úteis no futuro
+  categoria     String?
 }
 
 model FaturaItem {
   id          Int      @id @default(autoincrement())
   data        DateTime
-  lancamento  String   // Descrição da fatura
-  categoria   String?  // Categoria na fatura (opcional)
-  tipo        String?  // Tipo de compra (à vista, parcelado) (opcional)
+  lancamento  String
+  categoria   String?
+  tipo        String?
   valor       Float
-  nomeArquivo String   // Nome do arquivo de origem
+  nomeArquivo String
   criadoEm    DateTime @default(now())
+  
+  // CAMPO DE RELAÇÃO: Cada item de fatura pertence a um upload
+  uploadId    Int?
+  upload      Upload?  @relation(fields: [uploadId], references: [id])
 }

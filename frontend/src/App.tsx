@@ -1,26 +1,20 @@
 // frontend/src/App.tsx
 
 import { useState, useContext } from 'react';
-import { AppShell, Title, Group, Burger, Text, Notification, Button, ScrollArea } from '@mantine/core';
-import { Outlet } from 'react-router-dom';
-// AQUI ESTÁ A CORREÇÃO: Usamos 'import type' para importar apenas a definição do tipo.
+import { AppShell, Title, Group, Burger, Text, Notification, Button, ScrollArea, NavLink } from '@mantine/core';
+import { Outlet, Link } from 'react-router-dom';
+import { IconHome, IconFileInvoice, IconPlus, IconUpload } from '@tabler/icons-react'; // Troquei o ícone para um mais genérico
 import { NotificationContext } from './context/NotificationContext';
 import type { AppNotification } from './context/NotificationContext';
 
-// Componente auxiliar para um item da notificação
-function NotificationItem({ notification }: { notification: AppNotification }) {
+function NotificationItem({ notification, ...others }: { notification: AppNotification; [key: string]: any }) {
   return (
-    <Notification
-      color={notification.color}
-      title={notification.title}
-      withCloseButton={false}
-    >
+    <Notification color={notification.color} title={notification.title} withCloseButton={false} {...others}>
       {notification.message}
     </Notification>
   );
 }
 
-// Componente principal da aplicação
 export default function App() {
   const [menuAberto, setMenuAberto] = useState(false);
   const { notifications, clearNotifications } = useContext(NotificationContext);
@@ -29,7 +23,7 @@ export default function App() {
     <AppShell
       header={{ height: 60 }}
       footer={{ height: 60 }}
-      navbar={{ width: 300, breakpoint: 'sm', collapsed: { mobile: !menuAberto } }}
+      navbar={{ width: 250, breakpoint: 'sm', collapsed: { mobile: !menuAberto } }}
       padding="md"
     >
       <AppShell.Header>
@@ -40,15 +34,14 @@ export default function App() {
       </AppShell.Header>
 
       <AppShell.Navbar p="md">
-        <Group justify="space-between">
-            <Text>Notificações</Text>
-            {notifications.length > 0 && (
-                <Button variant="subtle" size="xs" onClick={clearNotifications}>
-                    Limpar Tudo
-                </Button>
-            )}
-        </Group>
-        <ScrollArea style={{ height: 'calc(100% - 40px)', marginTop: '10px' }}>
+        <NavLink label="Visão Geral" component={Link} to="/" leftSection={<IconHome size="1rem" />} />
+        <NavLink label="Faturas" component={Link} to="/faturas" leftSection={<IconFileInvoice size="1rem" />} />
+        {/* LINK ATUALIZADO */}
+        <NavLink label="Importar Planilha" component={Link} to="/importar-planilha" leftSection={<IconUpload size="1rem" />} />
+        <NavLink label="Adicionar Gasto" component={Link} to="/adicionar" leftSection={<IconPlus size="1rem" />} />
+
+        <Text size="xs" c="dimmed" mt="xl" mb="xs">PAINEL DE NOTIFICAÇÕES</Text>
+        <ScrollArea style={{ height: 'calc(100% - 210px)'}}>
           {notifications.length === 0 ? (
             <Text size="sm" c="dimmed">Nenhuma notificação</Text>
           ) : (
@@ -57,6 +50,11 @@ export default function App() {
             ))
           )}
         </ScrollArea>
+        {notifications.length > 0 && (
+          <Button variant="light" size="xs" onClick={clearNotifications} fullWidth mt="sm">
+            Limpar Notificações
+          </Button>
+        )}
       </AppShell.Navbar>
 
       <AppShell.Main>

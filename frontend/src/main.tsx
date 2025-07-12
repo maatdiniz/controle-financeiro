@@ -5,27 +5,19 @@ import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
 
-// Importa nossos componentes
+import { NotificationProvider } from './context/NotificationContext';
 import App from './App.tsx';
 import ListaGastos from './pages/ListaGastos.tsx';
 import AdicionarGasto from './pages/AdicionarGasto.tsx';
 
-// Criação do roteador
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <App />, // O App será o "molde" geral da página
+    element: <App />,
     children: [
-      {
-        index: true, // A rota inicial (/) vai renderizar a lista
-        element: <ListaGastos />,
-      },
-      {
-        path: "adicionar", // A rota /adicionar vai renderizar o formulário
-        element: <AdicionarGasto />,
-      },
+      { index: true, element: <ListaGastos /> },
+      { path: "adicionar", element: <AdicionarGasto /> },
     ],
   },
 ]);
@@ -33,8 +25,9 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <MantineProvider>
-      <Notifications /> {/* 2. Adicione o componente aqui */}
-      <RouterProvider router={router} />
+      <NotificationProvider>
+        <RouterProvider router={router} />
+      </NotificationProvider>
     </MantineProvider>
   </React.StrictMode>,
 );

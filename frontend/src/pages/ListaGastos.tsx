@@ -1,9 +1,9 @@
 // frontend/src/pages/ListaGastos.tsx
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { Table, Group, TextInput, Button, ScrollArea, Center, Loader, Text, Badge, FileButton } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { NotificationContext } from '../context/NotificationContext';
 
 interface Gasto {
   id: number;
@@ -20,6 +20,8 @@ interface Gasto {
 }
 
 export default function ListaGastos() {
+  const { addNotification } = useContext(NotificationContext);
+
   const [todosOsGastos, setTodosOsGastos] = useState<Gasto[]>([]);
   const [gastosExibidos, setGastosExibidos] = useState<Gasto[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -33,6 +35,7 @@ export default function ListaGastos() {
   const resetRef = useRef<() => void>(null);
 
   const fetchGastos = () => {
+    setCarregando(true);
     fetch('http://localhost:3000/gastos')
       .then(res => { if (!res.ok) throw new Error('Falha ao buscar dados'); return res.json(); })
       .then(data => { setTodosOsGastos(data); })
@@ -67,27 +70,26 @@ export default function ListaGastos() {
   const handleConciliar = async () => {
     if (!arquivoFatura) return;
     setProcessando(true);
+    addNotification({ title: 'Processando...', message: `Iniciada a conciliação de ${arquivoFatura.name}.`, color: 'blue' });
+
     const formData = new FormData();
     formData.append('fatura', arquivoFatura);
+
     try {
-      const response = await fetch('http://localhost:3000/conciliar', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await fetch('http://localhost:3000/conciliar', { method: 'POST', body: formData });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Erro no servidor');
-      notifications.show({
+
+      addNotification({
         title: 'Sucesso!',
-        message: `Conciliação processada. ${result.vinculosEncontrados} vínculos realizados.`,
+        message: `Conciliação concluída. ${result.vinculosEncontrados} vínculos realizados.`,
         color: 'green',
       });
+      
       fetchGastos();
+      
     } catch (err: any) {
-      notifications.show({
-        title: 'Erro na conciliação',
-        message: err.message,
-        color: 'red',
-      });
+      addNotification({ title: 'Erro na conciliação', message: err.message, color: 'red' });
     } finally {
       setProcessando(false);
       setArquivoFatura(null);
@@ -97,19 +99,13 @@ export default function ListaGastos() {
 
   const rows = gastosExibidos.map((gasto) => (
     <Table.Tr key={gasto.id} style={{ background: gasto.conciliado ? 'var(--mantine-color-green-light)' : undefined }}>
-      <Table.Td>
-        <Center>
-          <Badge color={gasto.origem === 'manual' ? 'blue' : 'teal'} variant="light">
-            {gasto.origem.toUpperCase()}
-          </Badge>
-        </Center>
-      </Table.Td>
-      <Table.Td>{new Date(gasto.data).toLocaleDateString()}</Table.Td>
-      <Table.Td>{gasto.descricao}</Table.Td>
-      <Table.Td>{gasto.categoria}</Table.Td>
-      <Table.Td align="right">{gasto.custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
-      <Table.Td align="right">{gasto.suaParte.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
-      <Table.Td align="right">{gasto.parteParceiro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
+        <Table.Td><Center><Badge color={gasto.origem === 'manual' ? 'blue' : 'teal'} variant="light">{gasto.origem.toUpperCase()}</Badge></Center></Table.Td>
+        <Table.Td>{new Date(gasto.data).toLocaleDateString()}</Table.Td>
+        <Table.Td>{gasto.descricao}</Table.Td>
+        <Table.Td>{gasto.categoria}</Table.Td>
+        <Table.Td align="right">{gasto.custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
+        <Table.Td align="right">{gasto.suaParte.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
+        <Table.Td align="right">{gasto.parteParceiro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Table.Td>
     </Table.Tr>
   ));
 
@@ -120,7 +116,7 @@ export default function ListaGastos() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Group justify="space-between" mb="md">
         <Group>
-          <TextInput placeholder="Filtrar por descrição..." value={textoBusca} onChange={(e) => setTextoBusca(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBuscarClick() }} />
+          <TextInput placeholder="Filtrar por descrição..." value={textoBusca} onChange={(e) => setTextoBusca(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBuscarClick() }}/>
           <Button onClick={handleBuscarClick}>Buscar</Button>
         </Group>
         <div>

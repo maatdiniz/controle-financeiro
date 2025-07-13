@@ -18,7 +18,6 @@ app.use(express.json());
 
 // --- FUNÇÕES AUXILIARES ---
 function log(message: string) { console.log(`[${new Date().toLocaleTimeString('pt-BR')}] ${message}`); }
-
 function parseDataFlex(dataInput: any): Date | null {
     if (typeof dataInput === 'number') {
         const dataExcel = XLSX.SSF.parse_date_code(dataInput);
@@ -34,10 +33,8 @@ function parseDataFlex(dataInput: any): Date | null {
     return null;
 }
 
-// --- ROTAS DA API ---
-
-// ROTA GET /gastos (com paginação, filtro, ordenação)
-// ROTA GET /gastos ATUALIZADA para aceitar filtro de 'conciliado'
+// --- ROTA GET /gastos ATUALIZADA para aceitar filtro de data ---
+// ROTA GET /gastos
 app.get('/gastos', async (req, res) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
@@ -45,29 +42,25 @@ app.get('/gastos', async (req, res) => {
         const filtro = req.query.filtro as string || '';
         const colunaOrdenada = req.query.coluna as string || 'data';
         const direcaoOrdenacao = req.query.direcao as 'asc' | 'desc' || 'desc';
-        
-        // NOVO PARÂMETRO:
-        const conciliadoStatus = req.query.conciliado as string; // 'true', 'false', ou undefined
-
+        const conciliadoStatus = req.query.conciliado as string;
+        const ano = req.query.ano ? parseInt(req.query.ano as string) : null;
+        const mes = req.query.mes ? parseInt(req.query.mes as string) : null;
         const skip = (page - 1) * pageSize;
-
-        const where: Prisma.GastoWhereInput = filtro ? { descricao: { contains: filtro, mode: 'insensitive' } } : {};
-        
-        // Adiciona a condição de conciliação ao 'where' se ela for fornecida
-        if (conciliadoStatus === 'true') {
-            where.conciliado = true;
-        } else if (conciliadoStatus === 'false') {
-            where.conciliado = false;
+        const where: Prisma.GastoWhereInput = {};
+        if (filtro) { where.descricao = { contains: filtro, mode: 'insensitive' }; }
+        if (conciliadoStatus === 'true') { where.conciliado = true; }
+        if (conciliadoStatus === 'false') { where.conciliado = false; }
+        if (ano && mes) {
+            const dataInicio = new Date(Date.UTC(ano, mes - 1, 1));
+            const dataFim = new Date(Date.UTC(ano, mes, 0, 23, 59, 59, 999));
+            where.data = { gte: dataInicio, lte: dataFim };
         }
-
         const orderBy: Prisma.GastoOrderByWithRelationInput = { [colunaOrdenada]: direcaoOrdenacao };
-        
         const [gastos, totalGastos] = await prisma.$transaction([
             prisma.gasto.findMany({ where, orderBy, skip, take: pageSize }),
             prisma.gasto.count({ where })
         ]);
-
-        res.status(200).json({ data: gastos, total: totalGastos, page: page, totalPages: Math.ceil(totalGastos / pageSize) });
+        res.status(200).json({ data: gastos, total: totalGastos, page, totalPages: Math.ceil(totalGastos / pageSize) });
     } catch (error) {
         console.error("Erro ao buscar gastos:", error);
         res.status(500).send("Erro ao buscar gastos.");
@@ -149,35 +142,96 @@ app.post('/recebimentos', async (req, res) => {
     }
 });
 
+// --- ROTA UPLOAD SPLITWISE (LÓGICA FINAL) ---
 app.post('/upload/splitwise', upload.single('splitwise_csv'), async (req, res) => {
     if (!req.file) return res.status(400).send('Nenhum arquivo enviado.');
-    const novoUpload = await prisma.upload.create({ data: { nomeArquivo: req.file.originalname, tipoArquivo: 'SPLITWISE_CSV' } });
-    const gastosDoCsv: any[] = [];
-    Readable.from(req.file.buffer).pipe(csvParser()).on('data', (data) => gastosDoCsv.push(data)).on('end', async () => {
-        let novosGastosAdicionados = 0, gastosIgnorados = 0;
-        const headers = Object.keys(gastosDoCsv[0] || {});
-        const nomeMatheus = headers[6], nomeRodrigo = headers[7];
-        if (!nomeMatheus || !nomeRodrigo) { return res.status(400).send('Formato de CSV do Splitwise inválido.'); }
-        for (const row of gastosDoCsv) {
-            try {
-                const custoTotal = parseFloat(row['Cost']);
-                const dataGasto = new Date(row['Date']);
-                const descricao = row['Description'];
-                if (isNaN(custoTotal) || !descricao || !dataGasto) { gastosIgnorados++; continue; }
-                const gastoExistente = await prisma.gasto.findFirst({ where: { data: dataGasto, descricao, custoTotal } });
-                if (gastoExistente) { gastosIgnorados++; continue; }
-                const parteMatheusRaw = parseFloat(row[nomeMatheus]), parteRodrigoRaw = parseFloat(row[nomeRodrigo]);
-                let custoFinalMatheus = 0, custoFinalRodrigo = 0;
-                if (parteMatheusRaw < 0 && Math.abs(parteMatheusRaw) === custoTotal) { custoFinalMatheus = custoTotal; }
-                else if (parteRodrigoRaw < 0 && Math.abs(parteRodrigoRaw) === custoTotal) { custoFinalRodrigo = custoTotal; }
-                else { custoFinalMatheus = Math.abs(parteMatheusRaw); custoFinalRodrigo = Math.abs(parteRodrigoRaw); }
-                await prisma.gasto.create({ data: { data: dataGasto, descricao, categoria: row['Category'], custoTotal, moeda: row['Currency'], suaParte: custoFinalMatheus, parteParceiro: custoFinalRodrigo, origem: 'csv', uploadId: novoUpload.id } });
-                novosGastosAdicionados++;
-            } catch (error) { gastosIgnorados++; }
-        }
-        res.status(201).json({ message: 'Importação concluída.', adicionados: novosGastosAdicionados, ignorados: gastosIgnorados });
+    log(`--- Iniciando importação Splitwise: ${req.file.originalname} ---`);
+
+    const novoUpload = await prisma.upload.create({
+        data: { nomeArquivo: req.file.originalname, tipoArquivo: 'SPLITWISE_CSV' }
     });
-});
+
+    const gastosDoCsv: any[] = [];
+    const fileContent = req.file.buffer.toString('utf-8');
+    const readableStream = Readable.from(fileContent);
+
+    readableStream
+        .pipe(csvParser({
+            // AQUI ESTÁ A MÁGICA:
+            skipLines: 1, // 1. Pula a primeira linha (os cabeçalhos)
+            headers: ['Data', 'Descricao', 'Categoria', 'Custo', 'Moeda', 'Parceiro', 'Eu'] // 2. Define os nomes que vamos usar
+        }))
+        .on('data', (data) => gastosDoCsv.push(data))
+        .on('end', async () => {
+            log(`Fim da leitura do CSV. ${gastosDoCsv.length} linhas de dados encontradas.`);
+            
+            const ultimaLinha = gastosDoCsv[gastosDoCsv.length - 1];
+            if (ultimaLinha && ultimaLinha['Descricao'] === 'Saldo total') {
+                gastosDoCsv.pop();
+                log('Linha de "Saldo total" removida.');
+            }
+
+            let novosGastosAdicionados = 0;
+            let gastosIgnorados = 0;
+            
+            for (const row of gastosDoCsv) {
+                try {
+                    const custoTotal = parseFloat(row['Custo']);
+                    const dataGasto = new Date(row['Data']);
+                    const descricao = row['Descricao'];
+
+                    if (isNaN(custoTotal) || !descricao || isNaN(dataGasto.getTime())) {
+                        gastosIgnorados++;
+                        continue;
+                    }
+                    
+                    const gastoExistente = await prisma.gasto.findFirst({
+                        where: { data: dataGasto, descricao, custoTotal }
+                    });
+
+                    if (gastoExistente) {
+                        gastosIgnorados++;
+                        continue;
+                    }
+                    
+                    const parteEuRaw = parseFloat(row['Eu']);
+                    const parteParceiroRaw = parseFloat(row['Parceiro']);
+                    let custoFinalEu = 0;
+                    let custoFinalParceiro = 0;
+
+                    if (parteEuRaw < 0 && Math.abs(parteEuRaw).toFixed(2) === custoTotal.toFixed(2)) {
+                        custoFinalEu = custoTotal;
+                    } 
+                    else if (parteParceiroRaw < 0 && Math.abs(parteParceiroRaw).toFixed(2) === custoTotal.toFixed(2)) {
+                        custoFinalParceiro = custoTotal;
+                    }
+                    else {
+                        custoFinalEu = Math.abs(parteEuRaw);
+                        custoFinalParceiro = Math.abs(parteParceiroRaw);
+                    }
+
+                    await prisma.gasto.create({
+                        data: {
+                            data: dataGasto, descricao, categoria: row['Categoria'], custoTotal, moeda: row['Moeda'],
+                            suaParte: custoFinalEu, parteParceiro: custoFinalParceiro, origem: 'csv', uploadId: novoUpload.id
+                        }
+                    });
+                    novosGastosAdicionados++;
+
+                } catch (error) {
+                    log(`Erro ao processar linha do Splitwise: ${error}`);
+                    gastosIgnorados++;
+                }
+            }
+
+            log(`Importação concluída. Adicionados: ${novosGastosAdicionados}. Ignorados: ${gastosIgnorados}.`);
+            res.status(201).json({ 
+                message: `Importação concluída.`,
+                adicionados: novosGastosAdicionados,
+                ignorados: gastosIgnorados
+            });
+        });
+});   
 
 app.post('/conciliar', upload.single('fatura'), async (req, res) => {
     if (!req.file) return res.status(400).send('Nenhum arquivo enviado.');
@@ -250,6 +304,73 @@ app.delete('/recebimentos/:id', async (req, res) => {
     } catch (error) { res.status(500).send("Erro ao excluir recebimento."); }
 });
 
+// --- NOVAS ROTAS PARA CONCILIAÇÃO MANUAL ---
+
+// 1. ROTA PARA BUSCAR ITENS DE FATURA CANDIDATOS
+app.get('/fatura-items/candidatos', async (req, res) => {
+    const valor = parseFloat(req.query.valor as string);
+    const dataGastoStr = req.query.data as string;
+
+    if (!valor || !dataGastoStr) {
+        return res.status(400).json({ error: 'Valor e data do gasto são obrigatórios.' });
+    }
+
+    try {
+        const dataGasto = new Date(dataGastoStr);
+        // Procura por itens de fatura com o mesmo valor e numa janela de 5 dias (antes ou depois)
+        const dataInicio = new Date(dataGasto);
+        dataInicio.setDate(dataGasto.getDate() - 5);
+        const dataFim = new Date(dataGasto);
+        dataFim.setDate(dataGasto.getDate() + 5);
+
+        const candidatos = await prisma.faturaItem.findMany({
+            where: {
+                valor: valor,
+                data: {
+                    gte: dataInicio,
+                    lte: dataFim,
+                },
+                Gasto: null, // Procura apenas por itens de fatura que AINDA NÃO foram vinculados a um gasto
+            },
+            orderBy: {
+                data: 'asc'
+            }
+        });
+        res.status(200).json(candidatos);
+    } catch (error) {
+        console.error("Erro ao buscar itens de fatura candidatos:", error);
+        res.status(500).send("Erro ao buscar itens de fatura.");
+    }
+});
+
+// 2. ROTA PARA EFETIVAR O VÍNCULO ENTRE UM GASTO E UM ITEM DE FATURA
+app.put('/gastos/:gastoId/vincular', async (req, res) => {
+    const gastoId = parseInt(req.params.gastoId);
+    const { faturaItemId, nomeArquivo } = req.body;
+
+    if (!faturaItemId) {
+        return res.status(400).json({ error: 'O ID do item da fatura é obrigatório.' });
+    }
+
+    try {
+        const gastoAtualizado = await prisma.gasto.update({
+            where: { id: gastoId },
+            data: {
+                conciliado: true,
+                faturaItemId: faturaItemId,
+                faturaInfo: nomeArquivo,
+            }
+        });
+        res.status(200).json(gastoAtualizado);
+    } catch (error) {
+        console.error(`Erro ao vincular gasto ${gastoId} com item ${faturaItemId}:`, error);
+        // Verifica se o erro é de constraint única (item de fatura já usado)
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return res.status(409).json({ error: 'Este item da fatura já está vinculado a outro gasto.' });
+        }
+        res.status(500).send("Erro ao criar o vínculo.");
+    }
+});
 
 // INICIA O SERVIDOR
 app.listen(port, () => {

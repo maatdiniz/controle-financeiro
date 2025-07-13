@@ -17,7 +17,6 @@ import Recebimentos from './pages/Recebimentos.tsx';
 import FinancasMensais from './pages/FinancasMensais.tsx'; // 1. Importa com o nome correto
 import ConciliacaoManual from './pages/ConciliacaoManual.tsx'; // Importa a nova página
 
-
 const router = createBrowserRouter([
   {
     path: "/",

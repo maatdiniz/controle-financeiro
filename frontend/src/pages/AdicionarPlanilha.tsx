@@ -28,14 +28,21 @@ export default function AdicionarPlanilha() {
   const handleImportar = async () => {
     if (!arquivoCsv) return;
     setProcessando(true);
-    addNotification({ title: 'Processando...', message: `Importando ${arquivoCsv.name}...`, color: 'blue' });
+    addNotification({ title: 'Processando...', message: `Importando o ficheiro ${arquivoCsv.name}.`, color: 'blue' });
+
     const formData = new FormData();
     formData.append('splitwise_csv', arquivoCsv);
+
     try {
       const response = await fetch('http://localhost:3000/upload/splitwise', { method: 'POST', body: formData });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Erro no servidor');
-      addNotification({ title: 'Importação Concluída', message: `Ficheiro processado. Adicionados: ${result.adicionados}, Ignorados: ${result.ignorados}.`, color: 'green' });
+
+      addNotification({
+        title: 'Importação Concluída',
+        message: `Ficheiro processado. Adicionados: ${result.adicionados}, Ignorados: ${result.ignorados}.`,
+        color: 'green',
+      });
       fetchUploads();
     } catch (err: any) {
       addNotification({ title: 'Erro na importação', message: err.message, color: 'red' });
@@ -48,22 +55,32 @@ export default function AdicionarPlanilha() {
 
   return (
     <>
-      <Title order={2}>Importar Planilha de Gastos (Estilo Splitwise)</Title>
+      <Title order={2}>Importar Planilha de Gastos (Splitwise)</Title>
+      
       <Paper withBorder shadow="md" p={30} mt={30} radius="md">
         <Title order={4}>Importar Novo Ficheiro</Title>
-        <Text size="sm" c="dimmed" mt={4}>O ficheiro deve ser um .csv exportado do Splitwise.</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+            O ficheiro deve ser um .csv exportado do Splitwise.
+        </Text>
         <Group mt="md">
-            <FileButton resetRef={resetRef} onChange={setArquivoCsv} accept=".csv">{(props) => <Button {...props}>Selecionar Planilha</Button>}</FileButton>
-            <Button onClick={handleImportar} disabled={!arquivoCsv} loading={processando}>Importar</Button>
+            <FileButton resetRef={resetRef} onChange={setArquivoCsv} accept=".csv">
+              {(props) => <Button {...props}>Selecionar Planilha</Button>}
+            </FileButton>
+            <Button onClick={handleImportar} disabled={!arquivoCsv} loading={processando}>
+              Importar
+            </Button>
         </Group>
-        {arquivoCsv && <Text size="sm" mt="sm">Ficheiro: {arquivoCsv.name}</Text>}
+        {arquivoCsv && <Text size="sm" mt="sm">Ficheiro selecionado: {arquivoCsv.name}</Text>}
       </Paper>
+
       <Paper withBorder shadow="md" p={30} mt={30} radius="md">
          <Title order={4}>Histórico de Importações</Title>
          {carregando ? <Center mt="lg"><Loader /></Center> : (
             <List spacing="xs" size="sm" mt="lg">
                 {listaDeUploads.length > 0 ? (
-                    listaDeUploads.map((upload) => (<List.Item key={upload.id}>{upload.nomeArquivo} - <Text span c="dimmed" size="xs">em {new Date(upload.dataUpload).toLocaleString()}</Text></List.Item>))
+                    listaDeUploads.map((upload) => (
+                        <List.Item key={upload.id}>{upload.nomeArquivo} - <Text span c="dimmed" size="xs">em {new Date(upload.dataUpload).toLocaleString()}</Text></List.Item>
+                    ))
                 ) : (
                     <Text size="sm" c="dimmed">Nenhuma planilha foi importada ainda.</Text>
                 )}

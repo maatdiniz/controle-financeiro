@@ -9,16 +9,15 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// NOVA TABELA PARA REGISTAR CADA UPLOAD
 model Upload {
-  id            Int      @id @default(autoincrement())
-  nomeArquivo   String
-  tipoArquivo   String   // 'SPLITWISE_CSV' ou 'FATURA_XLSX'
-  dataUpload    DateTime @default(now())
+  id          Int          @id @default(autoincrement())
+  nomeArquivo String
+  tipoArquivo String
+  dataUpload  DateTime     @default(now())
   
-  // Relações com as outras tabelas
-  gastos      Gasto[]
-  faturaItens FaturaItem[]
+  // Relações nomeadas para evitar ambiguidade
+  gastos      Gasto[]      @relation("UploadToGasto")
+  faturaItens FaturaItem[] @relation("UploadToFaturaItem")
 }
 
 model Gasto {
@@ -29,18 +28,20 @@ model Gasto {
   moeda         String
   suaParte      Float
   parteParceiro Float
-  origem        String   // 'csv', 'manual'
-  conciliado    Boolean  @default(false)
-  faturaInfo    String?
+  origem        String
+  categoria     String?
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
 
-  // CAMPO DE RELAÇÃO: Cada gasto de CSV pertence a um upload
+  // Relação com o Upload (nomeada)
   uploadId      Int?
-  upload        Upload?  @relation(fields: [uploadId], references: [id])
-  
-  // Colunas que não foram usadas, mas que podem ser úteis no futuro
-  categoria     String?
+  upload        Upload?  @relation("UploadToGasto", fields: [uploadId], references: [id])
+
+  // Relação com o FaturaItem (corrigida)
+  conciliado    Boolean  @default(false)
+  faturaInfo    String?
+  faturaItemId  Int?     @unique // Garante que um item de fatura só pode ser ligado a um gasto
+  faturaItem    FaturaItem? @relation("GastoToFaturaItem", fields: [faturaItemId], references: [id])
 }
 
 model FaturaItem {
@@ -52,8 +53,21 @@ model FaturaItem {
   valor       Float
   nomeArquivo String
   criadoEm    DateTime @default(now())
-  
-  // CAMPO DE RELAÇÃO: Cada item de fatura pertence a um upload
+
+  // Relação com o Upload (nomeada)
   uploadId    Int?
-  upload      Upload?  @relation(fields: [uploadId], references: [id])
+  upload      Upload?  @relation("UploadToFaturaItem", fields: [uploadId], references: [id])
+  
+  // Relação inversa com o Gasto (corrigida)
+  Gasto       Gasto?   @relation("GastoToFaturaItem")
+}
+
+model Recebimento {
+  id          Int       @id @default(autoincrement())
+  data        DateTime
+  descricao   String
+  valor       Float
+  origem      String?
+  criadoEm    DateTime  @default(now())
+  atualizadoEm DateTime @updatedAt
 }

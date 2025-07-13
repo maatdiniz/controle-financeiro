@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { Table, Group, TextInput, Button, ScrollArea, Center, Loader, Text, Badge, ActionIcon, Tooltip } from '@mantine/core';
-import { IconTrash, IconPencil } from '@tabler/icons-react'; // Adiciona o ícone de lápis
+import { Table, Group, TextInput, Button, ScrollArea, Center, Loader, Text, Badge, Pagination } from '@mantine/core';
 import { NotificationContext } from '../context/NotificationContext';
 
+// Interface Gasto (sem alterações)
 interface Gasto { id: number; data: string; descricao: string; categoria: string | null; custoTotal: number; moeda: string; suaParte: number; parteParceiro: number; origem: 'csv' | 'manual'; conciliado: boolean; faturaInfo: string | null; }
 
 export default function ListaGastos() {
@@ -13,19 +13,27 @@ export default function ListaGastos() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  
   const [textoBusca, setTextoBusca] = useState('');
   const [filtroAtivo, setFiltroAtivo] = useState('');
   const [colunaOrdenada, setColunaOrdenada] = useState<keyof Gasto | null>('data');
   const [direcaoOrdenacao, setDirecaoOrdenacao] = useState<'asc' | 'desc'>('desc');
+  
   const [activePage, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
 
   const fetchGastos = () => {
     setCarregando(true);
-    const params = new URLSearchParams({ page: activePage.toString(), pageSize: '50', filtro: filtroAtivo, coluna: colunaOrdenada || 'data', direcao: direcaoOrdenacao, });
+    const params = new URLSearchParams({
+        page: activePage.toString(), pageSize: '50', filtro: filtroAtivo,
+        coluna: colunaOrdenada || 'data', direcao: direcaoOrdenacao,
+    });
     fetch(`http://localhost:3000/gastos?${params.toString()}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("O servidor backend retornou um erro.");
+        return res.json()
+      })
       .then(data => {
         setGastos(data.data);
         setTotalPages(data.totalPages);
@@ -41,14 +49,9 @@ export default function ListaGastos() {
 
   const handleSort = (coluna: keyof Gasto) => {
     const novaDirecao = coluna === colunaOrdenada && direcaoOrdenacao === 'asc' ? 'desc' : 'asc';
-    setColunaOrdenada(coluna);
-    setDirecaoOrdenacao(novaDirecao);
-    setPage(1);
+    setColunaOrdenada(coluna); setDirecaoOrdenacao(novaDirecao); setPage(1);
   };
-  const handleBuscarClick = () => {
-    setFiltroAtivo(textoBusca);
-    setPage(1);
-  };
+  const handleBuscarClick = () => { setFiltroAtivo(textoBusca); setPage(1); };
   const handleExcluir = async (gastoId: number) => {
     if (!window.confirm('Tem certeza que deseja excluir este gasto?')) return;
     try {
@@ -72,16 +75,9 @@ export default function ListaGastos() {
             <Group gap="xs" justify="center">
                 {gasto.origem === 'manual' && (
                     <>
-                        <Tooltip label="Editar Gasto">
-                            <ActionIcon component={Link} to={`/editar/${gasto.id}`} color="blue" variant="subtle">
-                                <IconPencil size={18} />
-                            </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="Excluir Gasto">
-                            <ActionIcon color="red" variant="subtle" onClick={() => handleExcluir(gasto.id)}>
-                                <IconTrash size={18} />
-                            </ActionIcon>
-                        </Tooltip>
+                      {/* CORREÇÃO AQUI: removida a propriedade 'compact' */}
+                      <Button component={Link} to={`/editar/${gasto.id}`} variant="subtle" size="xs">Editar</Button>
+                      <Button variant="subtle" color="red" size="xs" onClick={() => handleExcluir(gasto.id)}>Excluir</Button>
                     </>
                 )}
             </Group>
@@ -108,7 +104,7 @@ export default function ListaGastos() {
               <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('descricao')}>Descrição</Table.Th>
               <Table.Th style={{ width: 180, cursor: 'pointer' }} onClick={() => handleSort('categoria')}>Categoria</Table.Th>
               <Table.Th style={{ width: 180, textAlign: 'right', cursor: 'pointer' }} onClick={() => handleSort('custoTotal')}>Custo Total</Table.Th>
-              <Table.Th style={{ width: 80, textAlign: 'center' }}>Ações</Table.Th>
+              <Table.Th style={{ width: 120, textAlign: 'center' }}>Ações</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>{rows.length > 0 ? rows : <Table.Tr><Table.Td colSpan={6}><Center>Nenhum gasto encontrado.</Center></Table.Td></Table.Tr>}</Table.Tbody>
@@ -116,7 +112,7 @@ export default function ListaGastos() {
       </ScrollArea>
       
       <Group justify="space-between" mt="md">
-        <Text size="sm">Total de registros: {totalRecords}</Text>
+        <Text size="sm">Total de registos: {totalRecords}</Text>
         <Pagination total={totalPages} value={activePage} onChange={setPage} />
       </Group>
     </div>

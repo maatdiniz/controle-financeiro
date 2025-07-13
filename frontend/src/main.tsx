@@ -5,13 +5,14 @@ import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
-
 import { NotificationProvider } from './context/NotificationContext';
+
 import App from './App.tsx';
 import ListaGastos from './pages/ListaGastos.tsx';
 import AdicionarGasto from './pages/AdicionarGasto.tsx';
 import Faturas from './pages/Faturas.tsx';
-import AdicionarPlanilha from './pages/AdicionarPlanilha.tsx'; // 1. Importa com o nome novo
+import AdicionarPlanilha from './pages/AdicionarPlanilha.tsx';
+import EditarGasto from './pages/EditarGasto.tsx'; // 1. Importa a nova página
 
 const router = createBrowserRouter([
   {
@@ -21,8 +22,8 @@ const router = createBrowserRouter([
       { index: true, element: <ListaGastos /> },
       { path: "adicionar", element: <AdicionarGasto /> },
       { path: "faturas", element: <Faturas /> },
-      // 2. A rota agora aponta para o novo nome de ficheiro
       { path: "importar-planilha", element: <AdicionarPlanilha /> },
+      { path: "editar/:id", element: <EditarGasto /> }, // 2. Adiciona a rota com parâmetro
     ],
   },
 ]);

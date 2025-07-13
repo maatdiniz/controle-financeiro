@@ -5,20 +5,26 @@ import { Title, Text, Group, FileButton, Button, Paper, List, ThemeIcon, Loader,
 import { IconFileText } from '@tabler/icons-react';
 import { NotificationContext } from '../context/NotificationContext';
 
+// Interface para o dado de upload que vem do backend
+interface Upload {
+  id: number;
+  nomeArquivo: string;
+  dataUpload: string;
+}
+
 export default function Faturas() {
   const { addNotification } = useContext(NotificationContext);
   const [arquivoFatura, setArquivoFatura] = useState<File | null>(null);
   const [processando, setProcessando] = useState(false);
   const resetRef = useRef<() => void>(null);
 
-  // NOVOS ESTADOS PARA A LISTA DE FATURAS
-  const [listaDeFaturas, setListaDeFaturas] = useState<string[]>([]);
+  const [listaDeFaturas, setListaDeFaturas] = useState<Upload[]>([]);
   const [carregandoFaturas, setCarregandoFaturas] = useState(true);
 
-  // Função para buscar a lista de faturas do backend
   const fetchFaturas = () => {
     setCarregandoFaturas(true);
-    fetch('http://localhost:3000/faturas')
+    // AQUI ESTÁ A CORREÇÃO PRINCIPAL: Chamando a rota correta
+    fetch('http://localhost:3000/uploads?tipo=FATURA')
       .then(res => {
         if (!res.ok) throw new Error('Falha ao buscar a lista de faturas.');
         return res.json();
@@ -34,7 +40,6 @@ export default function Faturas() {
       });
   };
 
-  // useEffect para buscar a lista quando a página carrega
   useEffect(() => {
     fetchFaturas();
   }, []);
@@ -58,7 +63,6 @@ export default function Faturas() {
         color: 'green',
       });
       
-      // ATUALIZA A LISTA DE FATURAS após uma nova conciliação
       fetchFaturas();
       
     } catch (err: any) {
@@ -95,25 +99,13 @@ export default function Faturas() {
 
       <Paper withBorder shadow="md" p={30} mt={30} radius="md">
          <Title order={4}>Faturas Enviadas</Title>
-         
-         {/* ÁREA DA LISTA DE FATURAS */}
          {carregandoFaturas ? (
             <Center mt="lg"><Loader /></Center>
          ) : (
-            <List
-                spacing="xs"
-                size="sm"
-                center
-                mt="lg"
-                icon={
-                    <ThemeIcon color="gray" size={24} radius="xl">
-                        <IconFileText size="1rem" />
-                    </ThemeIcon>
-                }
-            >
+            <List spacing="xs" size="sm" center mt="lg" icon={ <ThemeIcon color="gray" size={24} radius="xl"><IconFileText size="1rem" /></ThemeIcon> }>
                 {listaDeFaturas.length > 0 ? (
-                    listaDeFaturas.map((nome, index) => (
-                        <List.Item key={index}>{nome}</List.Item>
+                    listaDeFaturas.map((upload) => (
+                        <List.Item key={upload.id}>{upload.nomeArquivo}</List.Item>
                     ))
                 ) : (
                     <Text size="sm" c="dimmed">Nenhuma fatura foi enviada ainda.</Text>

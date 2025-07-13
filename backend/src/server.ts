@@ -2,11 +2,11 @@
 
 import express from 'express';
 import multer from 'multer';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client'; // Importa Prisma para tipos
 import cors from 'cors';
 import * as XLSX from 'xlsx';
-import csvParser from 'csv-parser';
 import { Readable } from 'stream';
+import csvParser from 'csv-parser';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -42,14 +42,68 @@ function parseDataFlex(dataInput: any): Date | null {
 
 // --- ROTAS DA API ---
 
-// ROTA PARA BUSCAR GASTOS (com paginação)
+// --- ROTA GET /gastos ATUALIZADA (PAGINAÇÃO + FILTRO + ORDENAÇÃO) ---
 app.get('/gastos', async (req, res) => {
     try {
-        const todosOsGastos = await prisma.gasto.findMany({ orderBy: { data: 'desc' } });
-        res.status(200).json(todosOsGastos);
+        // Parâmetros da query com valores padrão
+        const page = parseInt(req.query.page as string) || 1;
+        const pageSize = parseInt(req.query.pageSize as string) || 50;
+        const filtro = req.query.filtro as string || '';
+        const colunaOrdenada = req.query.coluna as string || 'data';
+        const direcaoOrdenacao = req.query.direcao as 'asc' | 'desc' || 'desc';
+
+        const skip = (page - 1) * pageSize;
+
+        // Constrói a cláusula 'where' para o filtro
+        const where: Prisma.GastoWhereInput = filtro ? {
+            descricao: {
+                contains: filtro,
+                mode: 'insensitive', // Ignora maiúsculas/minúsculas
+            },
+        } : {};
+        
+        // Constrói a cláusula 'orderBy' para a ordenação
+        const orderBy: Prisma.GastoOrderByWithRelationInput = {
+            [colunaOrdenada]: direcaoOrdenacao,
+        };
+
+        // Executa as duas queries em paralelo
+        const [gastos, totalGastos] = await prisma.$transaction([
+            prisma.gasto.findMany({
+                where,
+                orderBy,
+                skip,
+                take: pageSize,
+            }),
+            prisma.gasto.count({ where }) // O count agora respeita o filtro
+        ]);
+
+        res.status(200).json({
+            data: gastos,
+            total: totalGastos,
+            page: page,
+            totalPages: Math.ceil(totalGastos / pageSize)
+        });
     } catch (error) {
-        log("Erro ao buscar dados: " + error);
+        console.error("Erro ao buscar dados:", error);
         res.status(500).send("Erro ao buscar dados.");
+    }
+});
+
+// ROTA PARA BUSCAR UM ÚNICO GASTO PELO ID
+app.get('/gastos/:id', async (req, res) => {
+    const id = parseInt(req.params.id);
+    try {
+        const gasto = await prisma.gasto.findUnique({
+            where: { id },
+        });
+        if (!gasto) {
+            return res.status(404).json({ error: 'Gasto não encontrado.' });
+        }
+        res.status(200).json(gasto);
+    } catch (error) {
+        console.error(`Erro ao buscar gasto ID ${id}:`, error);
+        res.status(500).send("Erro interno ao buscar o gasto.");
     }
 });
 
@@ -95,6 +149,42 @@ app.post('/gastos', async (req, res) => {
     }
 });
 
+// --- NOVA ROTA: ATUALIZAR UM GASTO MANUAL ---
+app.put('/gastos/:id', async (req, res) => {
+    const id = parseInt(req.params.id);
+    const { data, descricao, categoria, custoTotal, suaParte, parteParceiro } = req.body;
+
+    try {
+        // Primeiro, verifica se o gasto existe e se é manual
+        const gastoExistente = await prisma.gasto.findUnique({ where: { id } });
+
+        if (!gastoExistente) {
+            return res.status(404).json({ error: 'Gasto não encontrado.' });
+        }
+        if (gastoExistente.origem !== 'manual') {
+            return res.status(403).json({ error: 'Não é permitido editar um gasto importado.' });
+        }
+
+        // Se for válido, atualiza o gasto
+        const gastoAtualizado = await prisma.gasto.update({
+            where: { id },
+            data: {
+                data: data ? new Date(data) : undefined,
+                descricao,
+                categoria,
+                custoTotal,
+                suaParte,
+                parteParceiro,
+            },
+        });
+
+        res.status(200).json(gastoAtualizado);
+
+    } catch (error) {
+        log(`Erro ao atualizar o gasto ID ${id}: ` + error);
+        res.status(500).send("Erro interno ao atualizar o gasto.");
+    }
+});
 
 // ROTA PARA UPLOAD DE FATURAS E CONCILIAÇÃO
 app.post('/conciliar', upload.single('fatura'), async (req, res) => {
